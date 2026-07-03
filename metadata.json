@@ -1,0 +1,6 @@
+{
+  "name": "Library Management System",
+  "description": "Hệ thống quản lý thư viện (Library Management System) với đầy đủ tính năng phân quyền Admin, Librarian, Member, mượn trả sách, quản lý tác giả, thể loại và báo cáo thống kê.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

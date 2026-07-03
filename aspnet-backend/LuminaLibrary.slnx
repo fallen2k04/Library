@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="LuminaLibrary.Application/LuminaLibrary.Application.csproj" />
+  <Project Path="LuminaLibrary.csproj" />
+  <Project Path="LuminaLibrary.Domain/LuminaLibrary.Domain.csproj" />
+  <Project Path="LuminaLibrary.Infrastructure/LuminaLibrary.Infrastructure.csproj" />
+  <Project Path="LuminaLibrary.Tests/LuminaLibrary.Tests.csproj" />
+</Solution>
