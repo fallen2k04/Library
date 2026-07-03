@@ -17,7 +17,7 @@ interface AboutUsProps {
 
 export default function AboutUs({ onNavigateView, onOpenAuth }: AboutUsProps) {
   return (
-    <div className="bg-slate-50 min-h-screen text-slate-800 font-sans" id="about-us-view">
+    <div className="bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-800 dark:text-slate-100 font-sans" id="about-us-view">
       
       {/* 1. HERO BANNER - Parchment / Calligraphy Background */}
       <section className="relative h-[480px] flex flex-col items-center justify-center text-center overflow-hidden">
@@ -66,17 +66,17 @@ export default function AboutUs({ onNavigateView, onOpenAuth }: AboutUsProps) {
       {/* 2. MISSION STATEMENT SECTION */}
       <section className="max-w-4xl mx-auto px-6 py-16 text-center space-y-6">
         <div className="flex justify-center">
-          <div className="p-3 bg-white border border-slate-200 rounded-2xl text-indigo-950 shadow-xs">
+          <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-indigo-950 dark:text-indigo-300 shadow-xs">
             <BookOpen className="w-7 h-7" />
           </div>
         </div>
         
-        <h2 className="text-2xl md:text-3xl font-extrabold text-[#112244] font-serif">
+        <h2 className="text-2xl md:text-3xl font-extrabold text-[#112244] dark:text-white font-serif">
           Mission Statement
         </h2>
 
-        <div className="bg-[#f0f7ff]/40 border-l-4 border-indigo-950 p-6 md:p-8 rounded-r-3xl text-left max-w-2xl mx-auto">
-          <p className="text-lg md:text-xl font-semibold text-[#112244] font-serif italic leading-relaxed">
+        <div className="bg-[#f0f7ff]/40 dark:bg-slate-900/60 border-l-4 border-indigo-950 dark:border-indigo-500 p-6 md:p-8 rounded-r-3xl text-left max-w-2xl mx-auto">
+          <p className="text-lg md:text-xl font-semibold text-[#112244] dark:text-slate-100 font-serif italic leading-relaxed">
             "To provide universal access to knowledge and inspire a lifelong passion for learning."
           </p>
         </div>
@@ -328,12 +328,6 @@ export default function AboutUs({ onNavigateView, onOpenAuth }: AboutUsProps) {
               className="w-full sm:w-auto px-8 py-3 bg-[#fcc04e] hover:bg-[#eab03e] text-slate-950 font-bold rounded-xl transition-all shadow-xs cursor-pointer text-sm"
             >
               Register Now
-            </button>
-            <button 
-              onClick={() => onNavigateView("catalog")}
-              className="w-full sm:w-auto px-8 py-3 border border-white/30 hover:bg-white/10 text-white font-bold rounded-xl transition-all cursor-pointer text-sm"
-            >
-              Contact Us
             </button>
           </div>
         </div>

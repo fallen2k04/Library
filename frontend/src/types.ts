@@ -94,3 +94,50 @@ export interface AuthState {
   token: string | null;
   user: User | null;
 }
+
+export interface SpaceReservation {
+  id: string;
+  userId: string;
+  spaceType: string;
+  date: string;
+  time: string;
+  ticketNumber: string;
+  code: string;
+  createdAt: string;
+}
+
+export interface LibrarianConsultation {
+  id: string;
+  userId: string;
+  librarianName: string;
+  subject: string;
+  date: string;
+  time: string;
+  ticketNumber: string;
+  createdAt: string;
+}
+
+export interface ClassSchedule {
+  id: string;
+  title: string;
+  instructor: string;
+  date: string;
+  time: string;
+  maxCapacity: number;
+  registeredCount: number;
+  description?: string;
+  createdAt: string;
+}
+
+export interface ClassRegistration {
+  id: string;
+  classScheduleId: string;
+  userId: string;
+  registrationDate: string;
+  classTitle?: string;
+  classInstructor?: string;
+  classDate?: string;
+  classTime?: string;
+  userFullName?: string;
+  userEmail?: string;
+}

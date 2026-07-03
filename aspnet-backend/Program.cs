@@ -146,6 +146,70 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<LibraryDbContext>();
     db.Database.EnsureCreated();
 
+    db.Database.ExecuteSqlRaw(@"
+        CREATE TABLE IF NOT EXISTS `librarian_consultations` (
+          `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+          `user_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+          `librarian_name` VARCHAR(200) NOT NULL,
+          `subject` VARCHAR(500) NOT NULL,
+          `date` DATETIME NOT NULL,
+          `time` VARCHAR(50) NOT NULL,
+          `ticket_number` VARCHAR(50) NOT NULL,
+          `status` VARCHAR(50) NOT NULL DEFAULT 'Pending',
+          `created_at` DATETIME NOT NULL,
+          PRIMARY KEY (`id`),
+          CONSTRAINT `FK_librarian_consultations_users` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB;
+    ");
+
+    try
+    {
+        db.Database.ExecuteSqlRaw("ALTER TABLE `librarian_consultations` ADD COLUMN `status` VARCHAR(50) NOT NULL DEFAULT 'Pending';");
+    }
+    catch { /* Ignore if column already exists */ }
+
+    db.Database.ExecuteSqlRaw(@"
+        CREATE TABLE IF NOT EXISTS `space_reservations` (
+          `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+          `user_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+          `space_type` VARCHAR(200) NOT NULL,
+          `date` DATETIME NOT NULL,
+          `time` VARCHAR(50) NOT NULL,
+          `ticket_number` VARCHAR(50) NOT NULL,
+          `code` VARCHAR(50) NOT NULL,
+          `created_at` DATETIME NOT NULL,
+          PRIMARY KEY (`id`),
+          CONSTRAINT `FK_space_reservations_users` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB;
+    ");
+
+    db.Database.ExecuteSqlRaw(@"
+        CREATE TABLE IF NOT EXISTS `class_schedules` (
+          `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+          `title` VARCHAR(200) NOT NULL,
+          `instructor` VARCHAR(200) NOT NULL,
+          `date` DATETIME NOT NULL,
+          `time` VARCHAR(50) NOT NULL,
+          `max_capacity` INT NOT NULL,
+          `registered_count` INT NOT NULL DEFAULT 0,
+          `description` TEXT NULL,
+          `created_at` DATETIME NOT NULL,
+          PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB;
+    ");
+
+    db.Database.ExecuteSqlRaw(@"
+        CREATE TABLE IF NOT EXISTS `class_registrations` (
+          `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+          `class_schedule_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+          `user_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+          `registration_date` DATETIME NOT NULL,
+          PRIMARY KEY (`id`),
+          CONSTRAINT `FK_class_registrations_class_schedules` FOREIGN KEY (`class_schedule_id`) REFERENCES `class_schedules` (`id`) ON DELETE CASCADE,
+          CONSTRAINT `FK_class_registrations_users` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB;
+    ");
+
     // Create or upgrade minh2k004@gmail.com to Admin
     var targetUser = db.Users.FirstOrDefault(u => u.Email == "minh2k004@gmail.com");
     var adminRole = db.Roles.FirstOrDefault(r => r.Name == "Admin");
@@ -169,6 +233,15 @@ using (var scope = app.Services.CreateScope())
             targetUser.RoleId = adminRole.Id;
             targetUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword("Minh@23122004");
         }
+        db.SaveChanges();
+    }
+
+    // Delete seeded mock librarians if they exist
+    var mockEmails = new[] { "alistair@library.com", "sarah@library.com", "elena@library.com" };
+    var mockUsers = db.Users.Where(u => mockEmails.Contains(u.Email)).ToList();
+    if (mockUsers.Any())
+    {
+        db.Users.RemoveRange(mockUsers);
         db.SaveChanges();
     }
 }

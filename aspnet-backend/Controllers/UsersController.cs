@@ -21,6 +21,25 @@ namespace LuminaLibrary.Controllers
             _context = context;
         }
 
+        // GET: api/users/librarians
+        [HttpGet("librarians")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetLibrarians()
+        {
+            var librarians = await _context.Users
+                .Include(u => u.Role)
+                .Where(u => u.Role != null && u.Role.Name == "Librarian")
+                .Select(u => new
+                {
+                    Id = u.Id,
+                    FullName = u.FullName,
+                    Role = u.Role != null ? u.Role.Name : "Librarian"
+                })
+                .ToListAsync();
+
+            return Ok(ApiResponse<object>.Ok(librarians, "Lấy danh sách thủ thư thành công."));
+        }
+
         // GET: api/users
         [HttpGet]
         [Authorize(Roles = "Admin")]
@@ -307,5 +326,36 @@ namespace LuminaLibrary.Controllers
             await _context.SaveChangesAsync();
             return Ok(ApiResponse<object>.Ok(null!, "Đã xóa người dùng thành công."));
         }
+
+        // POST: api/users/verify-password
+        [HttpPost("verify-password")]
+        public async Task<IActionResult> VerifyPassword([FromBody] VerifyPasswordDto dto)
+        {
+            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out var userId))
+            {
+                return Unauthorized(ApiResponse<object>.Fail("Không xác định được danh tính người dùng."));
+            }
+
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+            {
+                return NotFound(ApiResponse<object>.Fail("Không tìm thấy người dùng."));
+            }
+
+            bool isPasswordCorrect = BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash);
+            if (!isPasswordCorrect)
+            {
+                return BadRequest(ApiResponse<object>.Fail("Mật khẩu không chính xác."));
+            }
+
+            var otp = new Random().Next(100000, 999999).ToString();
+            return Ok(ApiResponse<object>.Ok(new { OtpCode = otp }, "Mật khẩu chính xác. Mã OTP đã được gửi."));
+        }
+    }
+
+    public class VerifyPasswordDto
+    {
+        public string Password { get; set; } = string.Empty;
     }
 }

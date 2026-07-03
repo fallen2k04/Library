@@ -25,6 +25,10 @@ namespace LuminaLibrary.Infrastructure
         public DbSet<EventReview> EventReviews { get; set; }
         public DbSet<EventRegistration> EventRegistrations { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
+        public DbSet<LibrarianConsultation> LibrarianConsultations { get; set; }
+        public DbSet<SpaceReservation> SpaceReservations { get; set; }
+        public DbSet<ClassSchedule> ClassSchedules { get; set; }
+        public DbSet<ClassRegistration> ClassRegistrations { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -90,6 +94,34 @@ namespace LuminaLibrary.Infrastructure
 
             modelBuilder.Entity<EventRegistration>()
                 .HasIndex(er => new { er.EventId, er.UserId })
+                .IsUnique();
+
+            modelBuilder.Entity<LibrarianConsultation>()
+                .HasOne(lc => lc.User)
+                .WithMany()
+                .HasForeignKey(lc => lc.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<SpaceReservation>()
+                .HasOne(sr => sr.User)
+                .WithMany()
+                .HasForeignKey(sr => sr.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClassRegistration>()
+                .HasOne(cr => cr.ClassSchedule)
+                .WithMany()
+                .HasForeignKey(cr => cr.ClassScheduleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClassRegistration>()
+                .HasOne(cr => cr.User)
+                .WithMany()
+                .HasForeignKey(cr => cr.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClassRegistration>()
+                .HasIndex(cr => new { cr.ClassScheduleId, cr.UserId })
                 .IsUnique();
 
             // Seed Initial Data

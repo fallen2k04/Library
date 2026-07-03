@@ -14,9 +14,10 @@ import {
   Library, User as UserIcon, LogIn, LogOut, ShieldAlert, BookOpen, 
   Settings, ClipboardList, BarChart2, Shield, Eye, EyeOff, UserPlus, Info, CheckCircle,
   LayoutDashboard, ListCollapse, Users, History, BookmarkCheck, FileBarChart2, Award,
-  Sun, Moon
+  Sun, Moon, Calendar
 } from "lucide-react";
 import AdminMembershipRequests from "./components/AdminMembershipRequests";
+import AdminClasses from "./components/AdminClasses";
 import { ConfirmModal } from "./components/ConfirmModal";
 
 export default function App() {
@@ -321,7 +322,6 @@ export default function App() {
             initialSearch={viewParams?.search}
             initialCategory={viewParams?.category || viewParams?.collection}
             onOpenAuth={openAuthModal}
-            language={language}
           />
         );
 
@@ -329,8 +329,7 @@ export default function App() {
         return (
           <AboutUs 
             onNavigateView={navigateView} 
-            onOpenAuth={openAuthModal} 
-            language={language}
+            onOpenAuth={openAuthModal}
           />
         );
 
@@ -370,6 +369,12 @@ export default function App() {
           return <ForbiddenScreen />;
         }
         return <AdminMembershipRequests onSuccessNotification={(msg) => showNotification(msg, "success")} language={language} />;
+
+      case "admin_classes":
+        if (!auth.user || (auth.user.role !== "Admin" && auth.user.role !== "Librarian")) {
+          return <ForbiddenScreen />;
+        }
+        return <AdminClasses onSuccessNotification={(msg) => showNotification(msg, "success")} language={language} />;
 
       case "admin_reports":
         if (!auth.user || (auth.user.role !== "Admin" && auth.user.role !== "Librarian")) {
@@ -515,6 +520,18 @@ export default function App() {
                 <span>{labels.borrowRecords}</span>
               </button>
 
+              <button
+                onClick={() => setCurrentView("admin_classes")}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
+                  currentView === "admin_classes"
+                    ? "bg-slate-100 dark:bg-slate-800 text-indigo-950 dark:text-slate-100"
+                    : "hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+              >
+                <Calendar className="w-4 h-4" />
+                <span>{language === "vi" ? "Quản lý lớp học" : "Class Management"}</span>
+              </button>
+
               {auth.user?.role === "Admin" && (
                 <button
                   onClick={() => setCurrentView("admin_users")}
@@ -641,6 +658,7 @@ export default function App() {
             <button onClick={() => setCurrentView("admin_reports")} className={currentView === "admin_reports" ? "text-indigo-950 font-bold" : ""}>Reports</button>
             <button onClick={() => setCurrentView("admin_books")} className={currentView === "admin_books" ? "text-indigo-950 font-bold" : ""}>Catalog</button>
             <button onClick={() => setCurrentView("admin_borrows")} className={currentView === "admin_borrows" ? "text-indigo-950 font-bold" : ""}>Borrows</button>
+            <button onClick={() => setCurrentView("admin_classes")} className={currentView === "admin_classes" ? "text-indigo-950 font-bold" : ""}>Classes</button>
             {auth.user?.role === "Admin" && (
               <button onClick={() => setCurrentView("admin_users")} className={currentView === "admin_users" ? "text-indigo-950 font-bold" : ""}>Users</button>
             )}

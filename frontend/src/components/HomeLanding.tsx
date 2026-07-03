@@ -233,7 +233,7 @@ export default function HomeLanding({ user, onNavigateView, onOpenAuth, onSucces
       setPaymentSuccess(true);
       onSuccessNotification("Yêu cầu nâng cấp của bạn đã được gửi tới quản trị viên.");
     } else {
-      alert(res.message);
+      onSuccessNotification(res.message);
     }
   };
 
@@ -250,9 +250,48 @@ export default function HomeLanding({ user, onNavigateView, onOpenAuth, onSucces
   const [consultDate, setConsultDate] = useState("2026-06-30");
   const [consultTime, setConsultTime] = useState("02:00 PM");
   const [consultSuccessTicket, setConsultSuccessTicket] = useState<any | null>(null);
+  const [dbLibrarians, setDbLibrarians] = useState<any[]>([]);
+  const [consultMode, setConsultMode] = useState("Online");
 
   // Carousel Slider State
   const [carouselIndex, setCarouselIndex] = useState(0);
+
+  // Class Schedules state
+  const [classes, setClasses] = useState<any[]>([]);
+  const [loadingClasses, setLoadingClasses] = useState(false);
+
+  const fetchClasses = async () => {
+    setLoadingClasses(true);
+    const res = await apiRequest("/api/classes");
+    if (res.success && res.data) {
+      setClasses(res.data);
+    }
+    setLoadingClasses(false);
+  };
+
+  useEffect(() => {
+    fetchClasses();
+    apiRequest<any[]>("/api/users/librarians").then((res) => {
+      if (res.success && res.data && res.data.length > 0) {
+        setDbLibrarians(res.data);
+        setLibrarianName(res.data[0].fullName);
+      }
+    });
+  }, []);
+
+  const handleRegisterClass = async (classId: string) => {
+    if (!user || user.id === "guest") {
+      onOpenAuth("login");
+      return;
+    }
+    const res = await apiRequest(`/api/classes/${classId}/register`, "POST");
+    if (res.success) {
+      onSuccessNotification("Đăng ký lớp học thành công!");
+      fetchClasses();
+    } else {
+      onSuccessNotification(res.message || "Đăng ký thất bại.");
+    }
+  };
 
   // Fetch real books from DB to blend or fallback
   useEffect(() => {
@@ -281,41 +320,58 @@ export default function HomeLanding({ user, onNavigateView, onOpenAuth, onSucces
   };
 
   // Space Reservation Submit
-  const handleReserveSpace = (e: React.FormEvent) => {
+  const handleReserveSpace = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) {
+    if (!user || user.id === "guest") {
       onOpenAuth("login");
       return;
     }
-    const ticket = {
-      id: "SPC-" + Math.floor(100000 + Math.random() * 900000),
-      memberName: user.fullName,
+    const res = await apiRequest("/api/space-reservations", "POST", {
       spaceType: reserveSpaceType,
-      date: reserveSpaceDate,
+      date: new Date(reserveSpaceDate).toISOString(),
       time: reserveSpaceTime,
-      code: "LUM-" + Math.floor(1000 + Math.random() * 9000)
-    };
-    setReserveSuccessTicket(ticket);
-    onSuccessNotification(`Successfully reserved study spot: ${reserveSpaceType}!`);
+    });
+    if (res.success && res.data) {
+      setReserveSuccessTicket({
+        id: res.data.ticketNumber,
+        memberName: user.fullName,
+        spaceType: res.data.spaceType,
+        date: res.data.date.split("T")[0],
+        time: res.data.time,
+        code: res.data.code
+      });
+      onSuccessNotification(`Successfully reserved study spot: ${reserveSpaceType}!`);
+    } else {
+      onSuccessNotification(res.message || "Đặt chỗ thất bại.");
+    }
   };
 
   // Consultation Submit
-  const handleConsultation = (e: React.FormEvent) => {
+  const handleConsultation = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) {
+    if (!user || user.id === "guest") {
       onOpenAuth("login");
       return;
     }
-    const ticket = {
-      id: "LBR-" + Math.floor(100000 + Math.random() * 900000),
-      memberName: user.fullName,
-      librarian: librarianName,
-      subject: consultSubject || "General Archival Inquiry",
-      date: consultDate,
+    const res = await apiRequest("/api/consultations", "POST", {
+      librarianName: librarianName,
+      subject: `[${consultMode === "Online" ? "Online" : "Offline"}] ${consultSubject || "General Archival Inquiry"}`,
+      date: new Date(consultDate).toISOString(),
       time: consultTime
-    };
-    setConsultSuccessTicket(ticket);
-    onSuccessNotification(`Successfully scheduled session with ${librarianName}!`);
+    });
+    if (res.success && res.data) {
+      setConsultSuccessTicket({
+        id: res.data.ticketNumber,
+        memberName: user.fullName,
+        librarian: res.data.librarianName,
+        subject: res.data.subject,
+        date: res.data.date.split("T")[0],
+        time: res.data.time
+      });
+      onSuccessNotification(language === "vi" ? `Gửi yêu cầu lịch hẹn tới thủ thư ${librarianName} thành công! Vui lòng chờ duyệt.` : `Consultation request sent to ${librarianName} successfully! Awaiting approval.`);
+    } else {
+      onSuccessNotification(res.message || "Đặt lịch thất bại.");
+    }
   };
 
   return (
@@ -659,6 +715,77 @@ export default function HomeLanding({ user, onNavigateView, onOpenAuth, onSucces
 
       </section>
 
+      {/* CLASS SCHEDULES SECTION */}
+      <section className="bg-slate-50 dark:bg-slate-900/40 rounded-3xl p-8 border border-slate-100 dark:border-slate-800/80 space-y-6">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-bold font-serif text-slate-900 dark:text-slate-100 tracking-tight">
+            {language === "vi" ? "Lớp Học Đăng Ký Theo Lịch (Trong vòng 1 tháng)" : "Available Class Schedules (Within 1 month)"}
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+            {language === "vi" ? "Đăng ký các lớp học chuyên sâu về tra cứu dữ liệu khoa học, viết bài luận và sử dụng công cụ nghiên cứu." : "Register for advanced classes on citation indices, scientific database searches, and research tools."}
+          </p>
+        </div>
+
+        {loadingClasses ? (
+          <div className="text-center py-6 text-xs text-slate-500">Loading schedules...</div>
+        ) : classes.length === 0 ? (
+          <div className="text-center py-6 text-xs text-slate-500">
+            {language === "vi" ? "Hiện tại chưa có lớp học nào được lên lịch." : "No classes scheduled at the moment."}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {classes.map((cls) => {
+              const clsDate = new Date(cls.date).toLocaleDateString(language === "vi" ? "vi-VN" : "en-US", {
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+              });
+              const isFull = cls.registeredCount >= cls.maxCapacity;
+
+              return (
+                <div key={cls.id} className="bg-white dark:bg-slate-950 p-5 rounded-2xl border border-slate-100/90 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between space-y-4">
+                  <div className="space-y-2">
+                    <span className="px-2 py-0.5 bg-indigo-50 dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 font-bold text-[9px] uppercase tracking-wider rounded-md">
+                      {cls.instructor}
+                    </span>
+                    <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm font-serif">{cls.title}</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2">
+                      {cls.description || (language === "vi" ? "Chưa có mô tả chi tiết." : "No description available.")}
+                    </p>
+                    <div className="space-y-1 pt-2 text-[11px] text-slate-600 dark:text-slate-400 font-semibold">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        <span>{clsDate}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        <span>{cls.time}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        <span>{cls.registeredCount} / {cls.maxCapacity} {language === "vi" ? "đã đăng ký" : "slots filled"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleRegisterClass(cls.id)}
+                    disabled={isFull}
+                    className={`w-full py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      isFull
+                        ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed"
+                        : "bg-indigo-950 dark:bg-indigo-500 hover:bg-indigo-900 dark:hover:bg-indigo-600 text-white"
+                    }`}
+                  >
+                    {isFull 
+                      ? (language === "vi" ? "Đã Đầy" : "Full Capacity") 
+                      : (language === "vi" ? "Đăng Ký Tham Gia" : "Register Now")}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
       {/* 4. RECENTLY ADDED SECTION - REAL CAROUSEL OF CARD ASSETS */}
       <section className="space-y-6">
         
@@ -942,7 +1069,9 @@ export default function HomeLanding({ user, onNavigateView, onOpenAuth, onSucces
                       required
                       value={reserveSpaceDate}
                       onChange={(e) => setReserveSpaceDate(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 outline-hidden text-slate-900 font-semibold"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 outline-hidden text-slate-900 font-semibold cursor-pointer"
+                      onClick={(e) => e.currentTarget.showPicker()}
+                      onFocus={(e) => e.currentTarget.showPicker()}
                     />
                   </div>
 
@@ -997,8 +1126,8 @@ export default function HomeLanding({ user, onNavigateView, onOpenAuth, onSucces
                   <Check className="w-5 h-5" />
                 </span>
                 <div className="space-y-1">
-                  <h4 className="font-extrabold text-indigo-950 text-sm">Consultation Scheduled!</h4>
-                  <p className="text-[10px] text-slate-500">A calendar invite and Zoom link have been forwarded to your email.</p>
+                  <h4 className="font-extrabold text-indigo-950 text-sm">Yêu cầu đã được gửi!</h4>
+                  <p className="text-[10px] text-slate-500">Yêu cầu hẹn gặp đã được gửi tới thủ thư. Vui lòng chờ duyệt.</p>
                 </div>
                 <div className="bg-white border border-dashed border-indigo-100 rounded-xl p-4 text-left space-y-2">
                   <div className="flex justify-between">
@@ -1035,9 +1164,23 @@ export default function HomeLanding({ user, onNavigateView, onOpenAuth, onSucces
                     onChange={(e) => setLibrarianName(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-hidden text-slate-900 font-bold"
                   >
-                    <option value="Dr. Alistair Thorne">Dr. Alistair Thorne (Historical Archives)</option>
-                    <option value="Sarah Jenkins, MLIS">Sarah Jenkins, MLIS (AI &amp; Tech Systems)</option>
-                    <option value="Dr. Elena Vance">Dr. Elena Vance (Bio-Science &amp; Cognition)</option>
+                    {dbLibrarians.map((lib) => (
+                      <option key={lib.id} value={lib.fullName}>
+                        {lib.fullName} ({lib.role === "Admin" ? "Quản trị viên" : "Thủ thư"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1.5 uppercase tracking-wider text-[9px]">Chế độ tư vấn (Consultation Mode) *</label>
+                  <select
+                    value={consultMode}
+                    onChange={(e) => setConsultMode(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-hidden text-slate-900 font-bold"
+                  >
+                    <option value="Online">Online (Tư vấn trực tuyến qua Zoom)</option>
+                    <option value="Offline">Offline (Tư vấn trực tiếp tại Thư viện)</option>
                   </select>
                 </div>
 
@@ -1061,7 +1204,9 @@ export default function HomeLanding({ user, onNavigateView, onOpenAuth, onSucces
                       required
                       value={consultDate}
                       onChange={(e) => setConsultDate(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 outline-hidden text-slate-900 font-semibold"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 outline-hidden text-slate-900 font-semibold cursor-pointer"
+                      onClick={(e) => e.currentTarget.showPicker()}
+                      onFocus={(e) => e.currentTarget.showPicker()}
                     />
                   </div>
 
