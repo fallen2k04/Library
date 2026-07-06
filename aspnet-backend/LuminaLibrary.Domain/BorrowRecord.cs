@@ -40,8 +40,7 @@ namespace LuminaLibrary.Domain
         public DateTime? ReturnDate { get; set; }
 
         [Required]
-        [MaxLength(20)]
-        public string Status { get; set; } = "Pending"; // Pending, Borrowed, Returned, Overdue, Rejected
+        public BorrowRecordStatus Status { get; set; } = BorrowRecordStatus.Pending; // Pending, Borrowed, Returned, Overdue, Rejected
 
         [Column(TypeName = "decimal(10,2)")]
         public decimal FineAmount { get; set; } = 0;

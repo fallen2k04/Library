@@ -111,7 +111,7 @@ namespace LuminaLibrary.Controllers
             _context.ClassRegistrations.Add(registration);
             await _context.SaveChangesAsync();
 
-            return Ok(ApiResponse<object>.Ok(null, "Đăng ký tham gia lớp học thành công."));
+            return Ok(ApiResponse<object>.Ok(null!, "Đăng ký tham gia lớp học thành công."));
         }
 
         // GET: api/classes/my (User's registered classes)

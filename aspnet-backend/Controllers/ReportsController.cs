@@ -27,12 +27,12 @@ namespace LuminaLibrary.Controllers
         {
             var now = DateTime.UtcNow;
             var activeBorrows = await _context.BorrowRecords
-                .Where(r => r.Status == "Borrowed" && r.DueDate < now)
+                .Where(r => r.Status == BorrowRecordStatus.Borrowed && r.DueDate < now)
                 .ToListAsync();
 
             foreach (var r in activeBorrows)
             {
-                r.Status = "Overdue";
+                r.Status = BorrowRecordStatus.Overdue;
                 var daysLate = (now - r.DueDate).Days;
                 if (daysLate > 0)
                 {
@@ -51,8 +51,8 @@ namespace LuminaLibrary.Controllers
             var totalTitles = await _context.Books.CountAsync();
             var totalBooks = await _context.Books.SumAsync(b => b.TotalCopies);
             
-            var totalBorrowed = await _context.BorrowRecords.CountAsync(r => r.Status == "Borrowed");
-            var totalOverdue = await _context.BorrowRecords.CountAsync(r => r.Status == "Overdue");
+            var totalBorrowed = await _context.BorrowRecords.CountAsync(r => r.Status == BorrowRecordStatus.Borrowed);
+            var totalOverdue = await _context.BorrowRecords.CountAsync(r => r.Status == BorrowRecordStatus.Overdue);
 
             var collectedFines = await _context.BorrowRecords
                 .Where(r => r.FineAmount > 0 && r.IsFinePaid)
@@ -195,32 +195,32 @@ namespace LuminaLibrary.Controllers
                 string actType, status, statusColor, bgColor;
                 switch (r.Status)
                 {
-                    case "Pending":
+                    case BorrowRecordStatus.Pending:
                         actType = "Yêu cầu mượn"; status = "PENDING";
                         statusColor = "bg-amber-50 text-amber-700 border-amber-100";
                         bgColor = "bg-amber-100 text-amber-800"; break;
-                    case "ReturnPending":
+                    case BorrowRecordStatus.ReturnPending:
                         actType = "Yêu cầu trả"; status = "RETURN PENDING";
                         statusColor = "bg-purple-50 text-purple-700 border-purple-100";
                         bgColor = "bg-purple-100 text-purple-850"; break;
-                    case "Borrowed":
+                    case BorrowRecordStatus.Borrowed:
                         actType = "Mượn sách"; status = "BORROWED";
                         statusColor = "bg-blue-50 text-blue-700 border-blue-100";
                         bgColor = "bg-blue-100 text-blue-800"; break;
-                    case "Returned":
+                    case BorrowRecordStatus.Returned:
                         actType = "Trả sách"; status = "RETURNED";
                         statusColor = "bg-green-50 text-green-700 border-green-100";
                         bgColor = "bg-green-100 text-green-800"; break;
-                    case "Overdue":
+                    case BorrowRecordStatus.Overdue:
                         actType = "Quá hạn"; status = "OVERDUE";
                         statusColor = "bg-red-50 text-red-700 border-red-100";
                         bgColor = "bg-rose-100 text-rose-800"; break;
-                    case "Rejected":
+                    case BorrowRecordStatus.Rejected:
                         actType = "Từ chối"; status = "REJECTED";
                         statusColor = "bg-slate-50 text-slate-700 border-slate-100";
                         bgColor = "bg-slate-100 text-slate-800"; break;
                     default:
-                        actType = "Hoạt động"; status = r.Status.ToUpper();
+                        actType = "Hoạt động"; status = r.Status.ToString().ToUpper();
                         statusColor = "bg-slate-50 text-slate-700 border-slate-100";
                         bgColor = "bg-slate-100 text-slate-800"; break;
                 }

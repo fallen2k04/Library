@@ -101,6 +101,14 @@ namespace LuminaLibrary.Controllers
             }
 
             request.Status = dto.Status;
+            if (dto.Status == "Approved")
+            {
+                var user = await _context.Users.FindAsync(request.UserId);
+                if (user != null)
+                {
+                    user.MembershipTier = request.TierName;
+                }
+            }
             await _context.SaveChangesAsync();
 
             var statusMsg = dto.Status == "Approved" ? "phê duyệt" : "từ chối";

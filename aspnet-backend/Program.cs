@@ -7,6 +7,10 @@ using Microsoft.OpenApi.Models;
 using LuminaLibrary.Infrastructure;
 using LuminaLibrary.Application;
 using LuminaLibrary.Domain;
+using LuminaLibrary.Services;
+using LuminaLibrary.BackgroundServices;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +30,47 @@ builder.Services.AddControllers()
             return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(response);
         };
     });
+
+// Register Domain/Application Services
+builder.Services.AddScoped<ICirculationService, CirculationService>();
+builder.Services.AddHostedService<OverdueCheckBackgroundService>();
+
+// Configure Rate Limiting
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.ContentType = "application/json";
+        var responseObj = ApiResponse<object>.Fail("Yêu cầu quá thường xuyên. Vui lòng thử lại sau.");
+        await context.HttpContext.Response.WriteAsJsonAsync(responseObj, cancellationToken: token);
+    };
+
+    // Policy for login / register: 10 requests per 1 minute
+    options.AddPolicy("AuthLimitPolicy", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? context.Request.Headers.Host.ToString(),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = 10,
+                QueueLimit = 0,
+                Window = TimeSpan.FromMinutes(1)
+            }));
+
+    // Policy for forgot / reset password: 5 requests per 10 minutes
+    options.AddPolicy("OtpLimitPolicy", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? context.Request.Headers.Host.ToString(),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = 5,
+                QueueLimit = 0,
+                Window = TimeSpan.FromMinutes(10)
+            }));
+});
 
 // Configure Database Connection (PostgreSQL, MySQL or SQL Server)
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
@@ -130,12 +175,13 @@ app.Use(async (context, next) =>
     }
     catch (Exception ex)
     {
+        var traceId = Guid.NewGuid().ToString();
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Đã xảy ra lỗi không kiểm soát được trong quá trình xử lý request.");
+        logger.LogError(ex, "Đã xảy ra lỗi không kiểm soát được trong quá trình xử lý request. TraceId: {TraceId}", traceId);
 
         context.Response.ContentType = "application/json";
         context.Response.StatusCode = 500;
-        var response = ApiResponse<object>.Fail("Đã xảy ra lỗi hệ thống. Vui lòng liên hệ quản trị viên hoặc thử lại sau.");
+        var response = ApiResponse<object>.Fail($"Đã xảy ra lỗi hệ thống. Vui lòng liên hệ quản trị viên và cung cấp mã lỗi: {traceId}");
         await context.Response.WriteAsJsonAsync(response);
     }
 });
@@ -144,96 +190,36 @@ app.Use(async (context, next) =>
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<LibraryDbContext>();
-    db.Database.EnsureCreated();
+    db.Database.Migrate();
 
-    db.Database.ExecuteSqlRaw(@"
-        CREATE TABLE IF NOT EXISTS `librarian_consultations` (
-          `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
-          `user_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
-          `librarian_name` VARCHAR(200) NOT NULL,
-          `subject` VARCHAR(500) NOT NULL,
-          `date` DATETIME NOT NULL,
-          `time` VARCHAR(50) NOT NULL,
-          `ticket_number` VARCHAR(50) NOT NULL,
-          `status` VARCHAR(50) NOT NULL DEFAULT 'Pending',
-          `created_at` DATETIME NOT NULL,
-          PRIMARY KEY (`id`),
-          CONSTRAINT `FK_librarian_consultations_users` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-        ) ENGINE=InnoDB;
-    ");
+    // Create or upgrade Admin from configuration
+    var adminEmail = app.Configuration["SeedAdmin:Email"];
+    var adminPassword = app.Configuration["SeedAdmin:Password"];
 
-    try
+    if (!string.IsNullOrEmpty(adminEmail) && !string.IsNullOrEmpty(adminPassword))
     {
-        db.Database.ExecuteSqlRaw("ALTER TABLE `librarian_consultations` ADD COLUMN `status` VARCHAR(50) NOT NULL DEFAULT 'Pending';");
-    }
-    catch { /* Ignore if column already exists */ }
-
-    db.Database.ExecuteSqlRaw(@"
-        CREATE TABLE IF NOT EXISTS `space_reservations` (
-          `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
-          `user_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
-          `space_type` VARCHAR(200) NOT NULL,
-          `date` DATETIME NOT NULL,
-          `time` VARCHAR(50) NOT NULL,
-          `ticket_number` VARCHAR(50) NOT NULL,
-          `code` VARCHAR(50) NOT NULL,
-          `created_at` DATETIME NOT NULL,
-          PRIMARY KEY (`id`),
-          CONSTRAINT `FK_space_reservations_users` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-        ) ENGINE=InnoDB;
-    ");
-
-    db.Database.ExecuteSqlRaw(@"
-        CREATE TABLE IF NOT EXISTS `class_schedules` (
-          `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
-          `title` VARCHAR(200) NOT NULL,
-          `instructor` VARCHAR(200) NOT NULL,
-          `date` DATETIME NOT NULL,
-          `time` VARCHAR(50) NOT NULL,
-          `max_capacity` INT NOT NULL,
-          `registered_count` INT NOT NULL DEFAULT 0,
-          `description` TEXT NULL,
-          `created_at` DATETIME NOT NULL,
-          PRIMARY KEY (`id`)
-        ) ENGINE=InnoDB;
-    ");
-
-    db.Database.ExecuteSqlRaw(@"
-        CREATE TABLE IF NOT EXISTS `class_registrations` (
-          `id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
-          `class_schedule_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
-          `user_id` CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
-          `registration_date` DATETIME NOT NULL,
-          PRIMARY KEY (`id`),
-          CONSTRAINT `FK_class_registrations_class_schedules` FOREIGN KEY (`class_schedule_id`) REFERENCES `class_schedules` (`id`) ON DELETE CASCADE,
-          CONSTRAINT `FK_class_registrations_users` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-        ) ENGINE=InnoDB;
-    ");
-
-    // Create or upgrade minh2k004@gmail.com to Admin
-    var targetUser = db.Users.FirstOrDefault(u => u.Email == "minh2k004@gmail.com");
-    var adminRole = db.Roles.FirstOrDefault(r => r.Name == "Admin");
-    if (adminRole != null)
-    {
-        if (targetUser == null)
+        var normalizedEmail = adminEmail.ToLower();
+        var targetUser = db.Users.FirstOrDefault(u => u.Email.ToLower() == normalizedEmail);
+        var adminRole = db.Roles.FirstOrDefault(r => r.Name == "Admin");
+        if (adminRole != null && targetUser == null)
         {
             db.Users.Add(new User
             {
-                FullName = "Minh Admin",
-                Email = "minh2k004@gmail.com",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Minh@23122004"),
+                FullName = "System Admin",
+                Email = normalizedEmail,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
                 RoleId = adminRole.Id,
                 IsLocked = false,
                 MembershipTier = "Academic Member",
                 CreatedAt = DateTime.UtcNow
             });
+            db.SaveChanges();
         }
-        else
-        {
-            targetUser.RoleId = adminRole.Id;
-            targetUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword("Minh@23122004");
-        }
-        db.SaveChanges();
+    }
+    else
+    {
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogWarning("SeedAdmin configuration is missing (SeedAdmin:Email or SeedAdmin:Password is empty). Skipping admin seeding.");
     }
 
     // Delete seeded mock librarians if they exist
@@ -256,6 +242,8 @@ if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Ena
 }
 
 app.UseCors("AllowSpecificOrigins");
+
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

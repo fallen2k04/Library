@@ -301,15 +301,15 @@ namespace LuminaLibrary.Controllers
                 return NotFound(ApiResponse<object>.Fail("Không tìm thấy sách."));
             }
 
-            var hasActiveBorrows = await _context.BorrowRecords.AnyAsync(br => br.BookId == id && (br.Status == "Borrowed" || br.Status == "Overdue"));
+            var hasActiveBorrows = await _context.BorrowRecords.AnyAsync(br => br.BookId == id && (br.Status == BorrowRecordStatus.Borrowed || br.Status == BorrowRecordStatus.Overdue));
             if (hasActiveBorrows)
             {
                 return BadRequest(ApiResponse<object>.Fail("Không thể xóa sách đang được người mượn giữ."));
             }
 
-            _context.Books.Remove(book);
+            book.IsDeleted = true;
             await _context.SaveChangesAsync();
-
+ 
             return Ok(ApiResponse<object>.Ok(null!, "Xóa sách thành công."));
         }
     }

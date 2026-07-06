@@ -41,6 +41,18 @@ export function setStoredAuth(token: string | null, user: User | null, refreshTo
 }
 
 let isRefreshing = false;
+let failedQueue: { resolve: (token: string | null) => void; reject: (err: any) => void }[] = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
 
 export async function apiRequest<T = any>(
   endpoint: string,
@@ -69,34 +81,59 @@ export async function apiRequest<T = any>(
     const response = await fetch(endpoint, config);
 
     if (response.status === 411 || response.status === 401) {
-      const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-      if (storedRefreshToken && !isRefreshing && endpoint !== "/api/auth/refresh-token" && endpoint !== "/api/auth/login") {
-        isRefreshing = true;
-        try {
-          const refreshRes = await fetch("/api/auth/refresh-token", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ refreshToken: storedRefreshToken }),
-          });
-
-          if (refreshRes.ok) {
-            const refreshData = await refreshRes.json();
-            if (refreshData.success && refreshData.data) {
-              setStoredAuth(refreshData.data.token, refreshData.data.user, refreshData.data.refreshToken);
-              isRefreshing = false;
-              // Retry the original request with the new token
-              return await apiRequest(endpoint, method, body);
-            }
-          }
-        } catch (err) {
-          console.error("Token refresh failed", err);
-        }
-        isRefreshing = false;
+      if (endpoint === "/api/auth/refresh-token" || endpoint === "/api/auth/login") {
+        setStoredAuth(null, null, null);
+        window.dispatchEvent(new Event("auth_expired"));
+        return { success: false, message: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." };
       }
 
-      // Unauthorized or session expired (and refresh failed)
+      const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+      if (!storedRefreshToken) {
+        setStoredAuth(null, null, null);
+        window.dispatchEvent(new Event("auth_expired"));
+        return { success: false, message: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." };
+      }
+
+      if (isRefreshing) {
+        return new Promise<string | null>((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((newToken) => {
+            if (newToken) {
+              headers["Authorization"] = `Bearer ${newToken}`;
+            }
+            return apiRequest(endpoint, method, body);
+          })
+          .catch(() => {
+            return { success: false, message: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." };
+          });
+      }
+
+      isRefreshing = true;
+      try {
+        const refreshRes = await fetch("/api/auth/refresh-token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken: storedRefreshToken }),
+        });
+
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          if (refreshData.success && refreshData.data) {
+            setStoredAuth(refreshData.data.token, refreshData.data.user, refreshData.data.refreshToken);
+            processQueue(null, refreshData.data.token);
+            isRefreshing = false;
+            // Retry the original request
+            return await apiRequest(endpoint, method, body);
+          }
+        }
+      } catch (err) {
+        console.error("Token refresh failed", err);
+      }
+
+      processQueue(new Error("Refresh failed"), null);
+      isRefreshing = false;
       setStoredAuth(null, null, null);
-      // Trigger a reload or event so UI responds
       window.dispatchEvent(new Event("auth_expired"));
       return { success: false, message: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." };
     }

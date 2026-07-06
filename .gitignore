@@ -12,3 +12,4 @@ coverage/
 **/obj/
 **/.vs/
 **/*.user
+appsettings.Development.json

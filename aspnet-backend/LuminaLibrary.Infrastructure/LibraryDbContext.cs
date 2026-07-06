@@ -29,10 +29,15 @@ namespace LuminaLibrary.Infrastructure
         public DbSet<SpaceReservation> SpaceReservations { get; set; }
         public DbSet<ClassSchedule> ClassSchedules { get; set; }
         public DbSet<ClassRegistration> ClassRegistrations { get; set; }
+        public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // Configure Soft Deletes
+            modelBuilder.Entity<Book>().HasQueryFilter(b => !b.IsDeleted);
+            modelBuilder.Entity<User>().HasQueryFilter(u => !u.IsDeleted);
 
             // Configure Relationships
             modelBuilder.Entity<BookAuthor>()
@@ -55,6 +60,10 @@ namespace LuminaLibrary.Infrastructure
                 .WithMany()
                 .HasForeignKey(b => b.CategoryId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<BorrowRecord>()
+                .Property(b => b.Status)
+                .HasConversion<string>();
 
             modelBuilder.Entity<BorrowRecord>()
                 .HasOne(br => br.Book)

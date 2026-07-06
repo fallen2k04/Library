@@ -48,6 +48,19 @@ interface CategoryStat {
   percentage: number;
 }
 
+const CATEGORY_TRANSLATIONS: Record<string, string> = {
+  "Văn học Việt Nam": "Vietnamese Literature",
+  "Văn học Nước ngoài": "Foreign Literature",
+  "Khoa học & Công nghệ": "Science & Technology",
+  "Kỹ năng sống": "Life Skills",
+  "Kinh tế & Đầu tư": "Economics & Investment",
+};
+
+export function translateCategory(name: string, lang: "vi" | "en"): string {
+  if (lang === "vi") return name;
+  return CATEGORY_TRANSLATIONS[name] ?? name;
+}
+
 interface AdminReportsProps {
   language?: "vi" | "en";
 }
@@ -336,7 +349,7 @@ export default function AdminReports({ language = "vi" }: AdminReportsProps) {
                 categories.map((cat, i) => (
                   <div key={i} className="space-y-1.5">
                     <div className="flex justify-between text-[11px] font-bold">
-                      <span className="text-slate-700 dark:text-slate-300 truncate pr-2">{cat.name}</span>
+                      <span className="text-slate-700 dark:text-slate-300 truncate pr-2">{translateCategory(cat.name, language)}</span>
                       <span className="text-slate-900 dark:text-slate-250 shrink-0">{cat.percentage}%</span>
                     </div>
                     <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">

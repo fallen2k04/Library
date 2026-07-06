@@ -39,8 +39,8 @@ namespace LuminaLibrary.Controllers
                 return BadRequest(ApiResponse<object>.Fail("Vui lòng chọn loại phòng học."));
             }
 
-            var ticketNumber = "SPC-" + new Random().Next(100000, 999999);
-            var pinCode = "LUM-" + new Random().Next(1000, 9999);
+            var ticketNumber = "SPC-" + Random.Shared.Next(100000, 999999);
+            var pinCode = "LUM-" + Random.Shared.Next(1000, 9999);
 
             var reservation = new SpaceReservation
             {

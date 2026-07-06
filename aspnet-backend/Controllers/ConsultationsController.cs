@@ -39,7 +39,7 @@ namespace LuminaLibrary.Controllers
                 return BadRequest(ApiResponse<object>.Fail("Vui lòng nhập đầy đủ thông tin yêu cầu."));
             }
 
-            var ticketNumber = "LBR-" + new Random().Next(100000, 999999);
+            var ticketNumber = "LBR-" + Random.Shared.Next(100000, 999999);
 
             var consultation = new LibrarianConsultation
             {
@@ -116,7 +116,7 @@ namespace LuminaLibrary.Controllers
             consultation.Status = "Approved";
             await _context.SaveChangesAsync();
 
-            return Ok(ApiResponse<object>.Ok(null, "Duyệt lịch hẹn thành công."));
+            return Ok(ApiResponse<object>.Ok(null!, "Duyệt lịch hẹn thành công."));
         }
 
         // PUT: api/consultations/{id}/reject
@@ -133,7 +133,7 @@ namespace LuminaLibrary.Controllers
             consultation.Status = "Rejected";
             await _context.SaveChangesAsync();
 
-            return Ok(ApiResponse<object>.Ok(null, "Từ chối lịch hẹn thành công."));
+            return Ok(ApiResponse<object>.Ok(null!, "Từ chối lịch hẹn thành công."));
         }
     }
 

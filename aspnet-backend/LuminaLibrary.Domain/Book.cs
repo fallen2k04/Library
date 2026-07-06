@@ -47,6 +47,11 @@ namespace LuminaLibrary.Domain
 
         public DateTime? UpdatedAt { get; set; }
 
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+
+        public bool IsDeleted { get; set; } = false;
+
         // Many-to-Many Navigation
         public List<BookAuthor> BookAuthors { get; set; } = new();
     }

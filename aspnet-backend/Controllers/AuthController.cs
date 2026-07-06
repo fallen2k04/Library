@@ -11,6 +11,7 @@ using Microsoft.IdentityModel.Tokens;
 using LuminaLibrary.Infrastructure;
 using LuminaLibrary.Domain;
 using LuminaLibrary.Application;
+using Microsoft.AspNetCore.RateLimiting;
 namespace LuminaLibrary.Controllers;
 
     [ApiController]
@@ -29,6 +30,7 @@ namespace LuminaLibrary.Controllers;
         // POST: api/auth/register
         [HttpPost("register")]
         [AllowAnonymous]
+        [EnableRateLimiting("AuthLimitPolicy")]
         public async Task<IActionResult> Register([FromBody] RegisterDto dto)
         {
             if (await _context.Users.AnyAsync(u => u.Email.ToLower() == dto.Email.ToLower()))
@@ -90,6 +92,7 @@ namespace LuminaLibrary.Controllers;
         // POST: api/auth/login
         [HttpPost("login")]
         [AllowAnonymous]
+        [EnableRateLimiting("AuthLimitPolicy")]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
             var user = await _context.Users
@@ -103,7 +106,8 @@ namespace LuminaLibrary.Controllers;
 
             if (user.IsLocked)
             {
-                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail("Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin để biết thêm chi tiết với số điện thoại: 0947150096"));
+                var supportPhone = _configuration["SupportPhoneNumber"] ?? "0947150096";
+                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail($"Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin để biết thêm chi tiết với số điện thoại: {supportPhone}"));
             }
 
             var token = GenerateJwtToken(user);
@@ -149,7 +153,8 @@ namespace LuminaLibrary.Controllers;
 
             if (user.IsLocked)
             {
-                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail("Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin để biết thêm chi tiết với số điện thoại: 0947150096"));
+                var supportPhone = _configuration["SupportPhoneNumber"] ?? "0947150096";
+                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail($"Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin để biết thêm chi tiết với số điện thoại: {supportPhone}"));
             }
 
             var token = GenerateJwtToken(user);
@@ -190,7 +195,7 @@ namespace LuminaLibrary.Controllers;
             return Ok(ApiResponse<object>.Ok(null!, "Đã đăng xuất thành công."));
         }
 
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Code, DateTime Expiry)> ResetTokens = new();
+
 
         public class ForgotPasswordDto
         {
@@ -216,28 +221,42 @@ namespace LuminaLibrary.Controllers;
         // POST: api/auth/forgot-password
         [HttpPost("forgot-password")]
         [AllowAnonymous]
+        [EnableRateLimiting("OtpLimitPolicy")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == dto.Email.ToLower());
-            if (user == null)
-            {
-                return BadRequest(ApiResponse<object>.Fail("Email không tồn tại trong hệ thống."));
-            }
+            var code = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
 
-            var random = new Random();
-            var code = random.Next(100000, 999999).ToString();
-            ResetTokens[dto.Email.ToLower()] = (code, DateTime.UtcNow.AddMinutes(10));
-
-            string subject = "Mã xác thực đặt lại mật khẩu - Lumina Library";
-            string body = $"Chào bạn,<br/><br/>Mã xác thực đặt lại mật khẩu của bạn là: <b>{code}</b>. Mã này sẽ hết hạn trong vòng 10 phút.<br/><br/>Trân trọng,<br/>Lumina Library Support Team";
-
-            try
+            if (user != null)
             {
-                await SendEmailAsync(dto.Email, subject, body);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Lỗi gửi email: {ex.Message}");
+                var existingToken = await _context.PasswordResetTokens.FindAsync(dto.Email.ToLower());
+                if (existingToken != null)
+                {
+                    existingToken.Code = code;
+                    existingToken.ExpiryDate = DateTime.UtcNow.AddMinutes(10);
+                }
+                else
+                {
+                    _context.PasswordResetTokens.Add(new PasswordResetToken
+                    {
+                        Email = dto.Email.ToLower(),
+                        Code = code,
+                        ExpiryDate = DateTime.UtcNow.AddMinutes(10)
+                    });
+                }
+                await _context.SaveChangesAsync();
+
+                string subject = "Mã xác thực đặt lại mật khẩu - Lumina Library";
+                string body = $"Chào bạn,<br/><br/>Mã xác thực đặt lại mật khẩu của bạn là: <b>{code}</b>. Mã này sẽ hết hạn trong vòng 10 phút.<br/><br/>Trân trọng,<br/>Lumina Library Support Team";
+
+                try
+                {
+                    await SendEmailAsync(dto.Email.ToLower(), subject, body);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Lỗi gửi email: {ex.Message}");
+                }
             }
 
             return Ok(ApiResponse<object>.Ok(null!, "Mã xác thực đặt lại mật khẩu đã được gửi thành công. Vui lòng kiểm tra email của bạn."));
@@ -246,30 +265,38 @@ namespace LuminaLibrary.Controllers;
         // POST: api/auth/reset-password
         [HttpPost("reset-password")]
         [AllowAnonymous]
+        [EnableRateLimiting("OtpLimitPolicy")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == dto.Email.ToLower());
             if (user == null)
             {
-                return BadRequest(ApiResponse<object>.Fail("Email không tồn tại."));
+                return BadRequest(ApiResponse<object>.Fail("Thông tin tài khoản hoặc mã xác thực không chính xác."));
             }
 
-            if (!ResetTokens.TryGetValue(dto.Email.ToLower(), out var tokenInfo) || tokenInfo.Code != dto.Token)
+            var tokenInfo = await _context.PasswordResetTokens.FindAsync(dto.Email.ToLower());
+            if (tokenInfo == null || tokenInfo.Code != dto.Token)
             {
                 return BadRequest(ApiResponse<object>.Fail("Mã xác thực không chính xác."));
             }
 
-            if (tokenInfo.Expiry < DateTime.UtcNow)
+            if (tokenInfo.ExpiryDate < DateTime.UtcNow)
             {
-                ResetTokens.TryRemove(dto.Email.ToLower(), out _);
+                _context.PasswordResetTokens.Remove(tokenInfo);
+                await _context.SaveChangesAsync();
                 return BadRequest(ApiResponse<object>.Fail("Mã xác thực đã hết hạn. Vui lòng yêu cầu mã mới."));
             }
 
             user.PasswordHash = HashPassword(dto.NewPassword);
             user.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
 
-            ResetTokens.TryRemove(dto.Email.ToLower(), out _);
+            _context.PasswordResetTokens.Remove(tokenInfo);
+            
+            // Revoke all refresh tokens for this user on password reset (logout from all devices)
+            var userTokens = _context.RefreshTokens.Where(rt => rt.UserId == user.Id);
+            _context.RefreshTokens.RemoveRange(userTokens);
+
+            await _context.SaveChangesAsync();
 
             return Ok(ApiResponse<object>.Ok(null!, "Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập bằng mật khẩu mới."));
         }
@@ -302,20 +329,22 @@ namespace LuminaLibrary.Controllers;
 
             int port = int.TryParse(smtpPortStr, out var p) ? p : 587;
 
-            using (var message = new System.Net.Mail.MailMessage())
-            {
-                message.From = new System.Net.Mail.MailAddress(senderEmail, senderName);
-                message.To.Add(new System.Net.Mail.MailAddress(toEmail));
-                message.Subject = subject;
-                message.Body = body;
-                message.IsBodyHtml = true;
+            var message = new MimeKit.MimeMessage();
+            message.From.Add(new MimeKit.MailboxAddress(senderName, senderEmail));
+            message.To.Add(new MimeKit.MailboxAddress("", toEmail));
+            message.Subject = subject;
 
-                using (var client = new System.Net.Mail.SmtpClient(smtpServer, port))
-                {
-                    client.Credentials = new System.Net.NetworkCredential(username, password);
-                    client.EnableSsl = enableSsl;
-                    await client.SendMailAsync(message);
-                }
+            var bodyBuilder = new MimeKit.BodyBuilder { HtmlBody = body };
+            message.Body = bodyBuilder.ToMessageBody();
+
+            using (var client = new MailKit.Net.Smtp.SmtpClient())
+            {
+                client.ServerCertificateValidationCallback = (s, c, h, e) => true;
+
+                await client.ConnectAsync(smtpServer, port, enableSsl ? MailKit.Security.SecureSocketOptions.StartTls : MailKit.Security.SecureSocketOptions.None);
+                await client.AuthenticateAsync(username, password);
+                await client.SendAsync(message);
+                await client.DisconnectAsync(true);
             }
         }
 
